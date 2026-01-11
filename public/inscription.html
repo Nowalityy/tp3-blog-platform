@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscription - Blog TP3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 Blog TP3</h1>
+    </header>
+
+    <nav id="mainNav">
+      <a href="/">Accueil</a>
+      <a href="/connexion.html">Connexion</a>
+      <a href="/inscription.html">Inscription</a>
+    </nav>
+
+    <div class="form-container">
+      <h2>Inscription</h2>
+      
+      <div id="message"></div>
+
+      <form id="formInscription">
+        <div class="form-group">
+          <label for="nomUtilisateur">Nom d'utilisateur</label>
+          <input type="text" id="nomUtilisateur" name="nomUtilisateur" required minlength="3">
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required>
+        </div>
+
+        <div class="form-group">
+          <label for="motDePasse">Mot de passe</label>
+          <input type="password" id="motDePasse" name="motDePasse" required minlength="6">
+        </div>
+
+        <div class="form-group">
+          <label for="confirmationMotDePasse">Confirmer le mot de passe</label>
+          <input type="password" id="confirmationMotDePasse" name="confirmationMotDePasse" required minlength="6">
+        </div>
+
+        <button type="submit">S'inscrire</button>
+      </form>
+
+      <p style="text-align: center; margin-top: 20px;">
+        Déjà un compte ? 
+        <a href="/connexion.html" style="color: #667eea; font-weight: 600;">Se connecter</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    function afficherMessage(texte, type = 'success') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message ${type}">${texte}</div>`;
+    }
+
+    document.getElementById('formInscription').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const bouton = e.target.querySelector('button[type="submit"]');
+      const nomUtilisateur = document.getElementById('nomUtilisateur').value;
+      const email = document.getElementById('email').value;
+      const motDePasse = document.getElementById('motDePasse').value;
+      const confirmationMotDePasse = document.getElementById('confirmationMotDePasse').value;
+
+      if (motDePasse !== confirmationMotDePasse) {
+        afficherMessage('Les mots de passe ne correspondent pas.', 'error');
+        return;
+      }
+
+      bouton.disabled = true;
+      bouton.classList.add('btn-loading');
+
+      try {
+        const response = await fetch('/api/auth/inscription', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ nomUtilisateur, email, motDePasse })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          afficherMessage('Inscription réussie ! Redirection...', 'success');
+          setTimeout(() => {
+            window.location.href = '/tableau-bord.html';
+          }, 1500);
+        } else {
+          afficherMessage(data.message || 'Erreur lors de l\'inscription.', 'error');
+          bouton.disabled = false;
+          bouton.classList.remove('btn-loading');
+        }
+      } catch (erreur) {
+        afficherMessage('Erreur de connexion au serveur.', 'error');
+        console.error('Erreur:', erreur);
+        bouton.disabled = false;
+        bouton.classList.remove('btn-loading');
+      }
+    });
+  </script>
+</body>
+</html>

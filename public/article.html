@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Article - Blog TP3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 Blog TP3</h1>
+    </header>
+
+    <nav id="mainNav">
+      <a href="/">Accueil</a>
+      <a href="/connexion.html">Connexion</a>
+      <a href="/inscription.html">Inscription</a>
+    </nav>
+
+    <div id="message"></div>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Chargement de l'article...</p>
+    </div>
+    <div id="article-content"></div>
+  </div>
+
+  <script>
+    // Fonction pour afficher un message
+    function afficherMessage(texte, type = 'success') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message ${type}">${texte}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    // Fonction pour formater la date
+    function formaterDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Récupérer l'ID de l'article depuis l'URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const articleId = urlParams.get('id');
+
+    if (!articleId) {
+      document.getElementById('loading').style.display = 'none';
+      afficherMessage('ID d\'article manquant.', 'error');
+    } else {
+      // Charger l'article
+      async function chargerArticle() {
+        try {
+          const response = await fetch(`/api/articles/${articleId}`);
+          
+          if (!response.ok) {
+            throw new Error('Article non trouvé');
+          }
+
+          const article = await response.json();
+
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('article-content').innerHTML = `
+            <div class="article-card">
+              <h2>${article.titre}</h2>
+              <div class="article-meta">
+                Par ${article.utilisateurId?.nomUtilisateur || 'Anonyme'} 
+                (${article.utilisateurId?.email || ''}) • 
+                Publié le ${formaterDate(article.createdAt)}
+                ${article.updatedAt !== article.createdAt ? 
+                  `• Modifié le ${formaterDate(article.updatedAt)}` : ''}
+              </div>
+              <div class="article-content" style="white-space: pre-wrap;">
+                ${article.contenu}
+              </div>
+              <div style="margin-top: 30px;">
+                <a href="/" class="link-button">← Retour aux articles</a>
+              </div>
+            </div>
+          `;
+        } catch (erreur) {
+          document.getElementById('loading').style.display = 'none';
+          afficherMessage('Erreur lors du chargement de l\'article.', 'error');
+          console.error('Erreur:', erreur);
+          
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 2000);
+        }
+      }
+
+    // Vérifier l'état de connexion pour adapter la navigation
+    async function verifierAuthentification() {
+      const nav = document.getElementById('mainNav');
+      try {
+        const response = await fetch('/api/auth/moi');
+        if (response.ok) {
+          const data = await response.json();
+          nav.innerHTML = `
+            <a href="/">Accueil</a>
+            <a href="/tableau-bord.html">Tableau de bord</a>
+            <button id="btnDeconnexion" class="btn-secondary" style="width: auto; margin: 5px; padding: 10px 25px;">Déconnexion</button>
+          `;
+          
+          document.getElementById('btnDeconnexion').addEventListener('click', async () => {
+            await fetch('/api/auth/deconnexion', { method: 'POST' });
+            window.location.reload();
+          });
+        }
+      } catch (erreur) {
+        // Pas connecté
+      }
+    }
+
+    // Charger les données au chargement de la page
+    verifierAuthentification();
+    chargerArticle();
+  </script>
+</body>
+</html>

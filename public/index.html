@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accueil - Blog TP3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 Blog TP3</h1>
+      <p>Bienvenue sur notre plateforme de blog</p>
+    </header>
+
+    <nav id="mainNav">
+      <a href="/">Accueil</a>
+      <a href="/connexion.html">Connexion</a>
+      <a href="/inscription.html">Inscription</a>
+    </nav>
+
+    <div id="message"></div>
+
+    <h2>Tous les articles</h2>
+    
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Chargement des articles...</p>
+    </div>
+    <div id="articles" class="articles-grid"></div>
+  </div>
+
+  <script>
+    // Fonction pour afficher un message
+    function afficherMessage(texte, type = 'success') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message ${type}">${texte}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    // Fonction pour formater la date
+    function formaterDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Charger tous les articles
+    async function chargerArticles() {
+      try {
+        const response = await fetch('/api/articles');
+        const articles = await response.json();
+
+        const loadingDiv = document.getElementById('loading');
+        const articlesDiv = document.getElementById('articles');
+
+        loadingDiv.style.display = 'none';
+
+        if (articles.length === 0) {
+          articlesDiv.innerHTML = `
+            <div class="empty-state">
+              <p>Aucun article pour le moment.</p>
+              <p>Soyez le premier à publier !</p>
+            </div>
+          `;
+          return;
+        }
+
+        articlesDiv.innerHTML = articles.map(article => `
+          <div class="article-card">
+            <h3>${article.titre}</h3>
+            <div class="article-meta">
+              Par ${article.utilisateurId?.nomUtilisateur || 'Anonyme'} • 
+              ${formaterDate(article.createdAt)}
+            </div>
+            <div class="article-content">
+              ${article.contenu.substring(0, 200)}${article.contenu.length > 200 ? '...' : ''}
+            </div>
+            <a href="/article.html?id=${article._id}" class="link-button">Lire la suite</a>
+          </div>
+        `).join('');
+      } catch (erreur) {
+        document.getElementById('loading').style.display = 'none';
+        afficherMessage('Erreur lors du chargement des articles.', 'error');
+        console.error('Erreur:', erreur);
+      }
+    }
+
+    // Vérifier l'état de connexion pour adapter la navigation
+    async function verifierAuthentification() {
+      const nav = document.getElementById('mainNav');
+      try {
+        const response = await fetch('/api/auth/moi');
+        if (response.ok) {
+          const data = await response.json();
+          nav.innerHTML = `
+            <a href="/">Accueil</a>
+            <a href="/tableau-bord.html">Tableau de bord</a>
+            <button id="btnDeconnexion" class="btn-secondary" style="width: auto; margin: 5px; padding: 10px 25px;">Déconnexion</button>
+          `;
+          
+          document.getElementById('btnDeconnexion').addEventListener('click', async () => {
+            await fetch('/api/auth/deconnexion', { method: 'POST' });
+            window.location.reload();
+          });
+        }
+      } catch (erreur) {
+        // Pas connecté, on garde la navigation par défaut
+      }
+    }
+
+    // Charger les articles et vérifier l'auth au chargement
+    verifierAuthentification();
+    chargerArticles();
+  </script>
+</body>
+</html>

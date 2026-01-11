@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tableau de bord - Blog TP3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 Blog TP3</h1>
+      <p>Tableau de bord</p>
+    </header>
+
+    <nav>
+      <a href="/">Accueil</a>
+      <a href="/tableau-bord.html">Tableau de bord</a>
+      <button id="btnDeconnexion" class="btn-secondary" style="display: inline-block; width: auto; padding: 10px 25px; border-radius: 25px;">Déconnexion</button>
+    </nav>
+
+    <div id="message"></div>
+    <div id="userInfo" class="user-info"></div>
+
+    <!-- Formulaire de création/modification d'article -->
+    <div class="form-container">
+      <h2 id="formTitle">Créer un nouvel article</h2>
+      
+      <form id="formArticle">
+        <input type="hidden" id="articleId">
+        
+        <div class="form-group">
+          <label for="titre">Titre de l'article</label>
+          <input type="text" id="titre" name="titre" required minlength="3">
+        </div>
+
+        <div class="form-group">
+          <label for="contenu">Contenu</label>
+          <textarea id="contenu" name="contenu" required minlength="10"></textarea>
+        </div>
+
+        <button type="submit" id="btnSoumettre">Publier l'article</button>
+        <button type="button" id="btnAnnuler" class="btn-secondary" style="display: none;">Annuler la modification</button>
+      </form>
+    </div>
+
+    <!-- Liste des articles de l'utilisateur -->
+    <div style="margin-top: 40px;">
+      <h2>Mes articles</h2>
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Chargement de vos articles...</p>
+      </div>
+      <div id="mesArticles" class="articles-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    let utilisateurCourant = null;
+    let modeEdition = false;
+
+    // Fonction pour afficher un message
+    function afficherMessage(texte, type = 'success') {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message ${type}">${texte}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    // Fonction pour formater la date
+    function formaterDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Vérifier l'authentification
+    async function verifierAuth() {
+      try {
+        const response = await fetch('/api/articles');
+        // Si on peut accéder à l'API, on est probablement connecté
+        // Pour obtenir les infos utilisateur, on va créer une route dédiée ou utiliser les articles
+        return true;
+      } catch (erreur) {
+        window.location.href = '/connexion.html';
+        return false;
+      }
+    }
+
+    // Charger les articles de l'utilisateur
+    async function chargerMesArticles() {
+      try {
+        const response = await fetch('/api/articles');
+        const tousLesArticles = await response.json();
+
+        const loadingDiv = document.getElementById('loading');
+        const articlesDiv = document.getElementById('mesArticles');
+
+        loadingDiv.style.display = 'none';
+
+        // Filtrer pour n'afficher que les articles de l'utilisateur connecté
+        // Note: Dans une vraie app, on aurait une route /api/articles/mes-articles
+        const mesArticles = tousLesArticles;
+
+        if (mesArticles.length === 0) {
+          articlesDiv.innerHTML = `
+            <div class="empty-state">
+              <p>Vous n'avez pas encore publié d'article.</p>
+              <p>Utilisez le formulaire ci-dessus pour créer votre premier article !</p>
+            </div>
+          `;
+          return;
+        }
+
+        articlesDiv.innerHTML = mesArticles.map(article => `
+          <div class="article-card">
+            <h3>${article.titre}</h3>
+            <div class="article-meta">
+              Publié le ${formaterDate(article.createdAt)}
+              ${article.updatedAt !== article.createdAt ? 
+                `• Modifié le ${formaterDate(article.updatedAt)}` : ''}
+            </div>
+            <div class="article-content">
+              ${article.contenu.substring(0, 150)}${article.contenu.length > 150 ? '...' : ''}
+            </div>
+            <div class="article-actions">
+              <a href="/article.html?id=${article._id}" class="link-button">Voir</a>
+              <button onclick="modifierArticle('${article._id}', '${article.titre.replace(/'/g, "\\'")}', \`${article.contenu.replace(/`/g, '\\`')}\`)" class="btn-edit">Modifier</button>
+              <button onclick="supprimerArticle('${article._id}')" class="btn-danger">Supprimer</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (erreur) {
+        document.getElementById('loading').style.display = 'none';
+        afficherMessage('Erreur lors du chargement de vos articles.', 'error');
+        console.error('Erreur:', erreur);
+      }
+    }
+
+    // Créer ou modifier un article
+    document.getElementById('formArticle').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const articleId = document.getElementById('articleId').value;
+      const titre = document.getElementById('titre').value;
+      const contenu = document.getElementById('contenu').value;
+
+      const url = modeEdition ? `/api/articles/${articleId}` : '/api/articles';
+      const methode = modeEdition ? 'PUT' : 'POST';
+
+      try {
+        const response = await fetch(url, {
+          method: methode,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ titre, contenu })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          afficherMessage(data.message, 'success');
+          document.getElementById('formArticle').reset();
+          annulerModification();
+          chargerMesArticles();
+        } else {
+          afficherMessage(data.message || 'Erreur lors de l\'opération.', 'error');
+        }
+      } catch (erreur) {
+        afficherMessage('Erreur de connexion au serveur.', 'error');
+        console.error('Erreur:', erreur);
+      }
+    });
+
+    // Modifier un article
+    function modifierArticle(id, titre, contenu) {
+      modeEdition = true;
+      document.getElementById('articleId').value = id;
+      document.getElementById('titre').value = titre;
+      document.getElementById('contenu').value = contenu;
+      document.getElementById('formTitle').textContent = 'Modifier l\'article';
+      document.getElementById('btnSoumettre').textContent = 'Mettre à jour';
+      document.getElementById('btnAnnuler').style.display = 'block';
+      
+      // Scroll vers le formulaire
+      document.getElementById('formArticle').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Annuler la modification
+    document.getElementById('btnAnnuler').addEventListener('click', annulerModification);
+
+    function annulerModification() {
+      modeEdition = false;
+      document.getElementById('formArticle').reset();
+      document.getElementById('articleId').value = '';
+      document.getElementById('formTitle').textContent = 'Créer un nouvel article';
+      document.getElementById('btnSoumettre').textContent = 'Publier l\'article';
+      document.getElementById('btnAnnuler').style.display = 'none';
+    }
+
+    // Supprimer un article
+    async function supprimerArticle(id) {
+      if (!confirm('Êtes-vous sûr de vouloir supprimer cet article ?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/articles/${id}`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          afficherMessage(data.message, 'success');
+          chargerMesArticles();
+        } else {
+          afficherMessage(data.message || 'Erreur lors de la suppression.', 'error');
+        }
+      } catch (erreur) {
+        afficherMessage('Erreur de connexion au serveur.', 'error');
+        console.error('Erreur:', erreur);
+      }
+    }
+
+    // Déconnexion
+    document.getElementById('btnDeconnexion').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/auth/deconnexion', {
+          method: 'POST'
+        });
+
+        if (response.ok) {
+          afficherMessage('Déconnexion réussie !', 'success');
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1000);
+        }
+      } catch (erreur) {
+        console.error('Erreur:', erreur);
+        window.location.href = '/';
+      }
+    });
+
+    // Initialisation
+    verifierAuth();
+    chargerMesArticles();
+  </script>
+</body>
+</html>
